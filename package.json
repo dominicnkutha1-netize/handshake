@@ -1,0 +1,16 @@
+{
+  "name": "handshake",
+  "version": "1.0.0",
+  "private": true,
+  "description": "An interactive model of what happens between a URL and the first pixel: DNS, TCP or QUIC, TLS, the request, the download and the paint, drawn to scale.",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "test": "node --test tests/",
+    "start": "python -m http.server 8080",
+    "serve": "npx --yes serve . -l 8080"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

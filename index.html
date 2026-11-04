@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>handshake — the real cost of an HTTPS page load, drawn to scale</title>
+<meta name="description" content="An interactive model of what happens between a URL and the first pixel: DNS, TCP or QUIC, TLS, the request, the download and the paint — with every round trip counted and drawn to scale. Runs entirely in your browser.">
+<meta name="author" content="Busokuhle Dominic Nkutha">
+<meta property="og:type" content="website">
+<meta property="og:title" content="handshake — what a URL really costs, drawn to scale">
+<meta property="og:description" content="An interactive model of an HTTPS page load: DNS, transport, TLS, the request, the download and the paint. Change the round-trip time and watch the handshake become the page.">
+<meta property="og:url" content="https://dominicnkutha1-netize.github.io/handshake/">
+<meta property="og:image" content="https://dominicnkutha1-netize.github.io/handshake/docs/screenshots/social.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='5' fill='%23070d16'/%3E%3Cpath d='M7 12h14l-4-4M25 20H11l4 4' fill='none' stroke='%2346d3e6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<header class="masthead">
+  <div class="masthead-inner">
+    <a class="wordmark" href="./">handshake<span aria-hidden="true">⇄</span></a>
+    <p class="tagline">A URL is a promise. This is the round-trip bill.</p>
+    <nav class="masthead-links" aria-label="Page">
+      <a href="#model">The model</a>
+      <a href="#limits">Limits</a>
+      <a href="https://github.com/dominicnkutha1-netize/handshake">Source</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+  <section class="intro">
+    <h1>From URL to first byte, drawn to scale.</h1>
+    <p>
+      Before a browser can render a page it has to find the server, open a connection,
+      agree on encryption, ask for the document and wait. Those steps cost round trips,
+      not megabytes — which is why a 200 KB page can feel slower than a 2 MB one, and why
+      the first visit to a site feels different from the second.
+    </p>
+    <p class="disclaimer">
+      <strong>This is a model, not a measurement.</strong> Nothing here opens a connection or
+      reads your network. It counts protocol round trips and transfers at the bandwidth you
+      choose, and it says where the arithmetic is approximate. Change anything below and the
+      timeline is rebuilt in front of you.
+    </p>
+  </section>
+
+  <div class="console">
+
+    <aside class="controls" aria-labelledby="controls-heading">
+      <h2 id="controls-heading">Scenario</h2>
+
+      <div class="presets" role="group" aria-label="Preset scenarios">
+        <button type="button" class="preset" data-preset="cold">Cold visit, fibre</button>
+        <button type="button" class="preset" data-preset="warm">Warm revisit</button>
+        <button type="button" class="preset" data-preset="mobile">Mobile 4G</button>
+        <button type="button" class="preset" data-preset="legacy">Legacy stack</button>
+      </div>
+
+      <p class="preset-blurb" id="preset-blurb">First visit to a site: nothing cached, new connection, modern stack.</p>
+
+      <form id="controls" class="control-list">
+        <div class="control">
+          <label for="rtt">Round-trip time <output id="rtt-out" for="rtt">15 ms</output></label>
+          <input type="range" id="rtt" name="rtt" min="1" max="400" step="1" value="15">
+          <p class="control-note">Fibre is ~10 ms, 4G ~120 ms, satellite ~600 ms.</p>
+        </div>
+
+        <div class="control">
+          <label for="serverMs">Server think time <output id="serverMs-out" for="serverMs">40 ms</output></label>
+          <input type="range" id="serverMs" name="serverMs" min="0" max="1000" step="10" value="40">
+          <p class="control-note">Time spent in somebody else's code before the first byte.</p>
+        </div>
+
+        <div class="control">
+          <label for="documentKb">Document size <output id="documentKb-out" for="documentKb">180 KB</output></label>
+          <input type="range" id="documentKb" name="documentKb" min="5" max="3000" step="5" value="180">
+        </div>
+
+        <div class="control">
+          <label for="assets">Subresources <output id="assets-out" for="assets">20</output></label>
+          <input type="range" id="assets" name="assets" min="0" max="100" step="1" value="20">
+          <p class="control-note">Scripts, stylesheets, fonts, images.</p>
+        </div>
+
+        <div class="control">
+          <label for="mbps">Bandwidth <output id="mbps-out" for="mbps">50 Mbps</output></label>
+          <input type="range" id="mbps" name="mbps" min="1" max="200" step="1" value="50">
+        </div>
+
+        <fieldset class="control segmented">
+          <legend>DNS</legend>
+          <div class="choices">
+            <label><input type="radio" name="dns" value="cold" checked><span>Cold</span></label>
+            <label><input type="radio" name="dns" value="resolver" checked><span>Resolver cache</span></label>
+            <label><input type="radio" name="dns" value="os"><span>OS cache</span></label>
+          </div>
+        </fieldset>
+
+        <fieldset class="control segmented">
+          <legend>Connection</legend>
+          <div class="choices">
+            <label><input type="radio" name="connection" value="new" checked><span>New</span></label>
+            <label><input type="radio" name="connection" value="reused"><span>Reused</span></label>
+          </div>
+        </fieldset>
+
+        <fieldset class="control segmented">
+          <legend>TLS</legend>
+          <div class="choices">
+            <label><input type="radio" name="tls" value="1.3" checked><span>1.3</span></label>
+            <label><input type="radio" name="tls" value="1.2"><span>1.2</span></label>
+          </div>
+        </fieldset>
+
+        <fieldset class="control segmented">
+          <legend>HTTP</legend>
+          <div class="choices">
+            <label><input type="radio" name="http" value="h1"><span>1.1</span></label>
+            <label><input type="radio" name="http" value="h2" checked><span>2</span></label>
+            <label><input type="radio" name="http" value="h3"><span>3</span></label>
+          </div>
+        </fieldset>
+      </form>
+
+      <div class="control-actions">
+        <button type="button" id="reset" class="ghost">Reset</button>
+        <button type="button" id="share" class="ghost">Copy link</button>
+      </div>
+    </aside>
+
+    <section class="stage" aria-labelledby="stage-heading">
+      <h2 id="stage-heading" class="sr-only">Result</h2>
+
+      <div class="summary" id="summary" aria-live="polite">
+        <div class="summary-top">
+          <div class="total">
+            <span class="total-value" id="total-value">—</span>
+            <span class="total-label">to first paint</span>
+          </div>
+          <dl class="facts">
+            <div><dt>Round trips</dt><dd id="fact-rtts">—</dd></div>
+            <div><dt>On the wire</dt><dd id="fact-bytes">—</dd></div>
+            <div><dt>First byte</dt><dd id="fact-ttfb">—</dd></div>
+          </dl>
+        </div>
+        <p class="insight" id="insight"></p>
+        <div class="stage-tools">
+          <button type="button" id="play" class="primary" aria-pressed="false">Play the load</button>
+          <span class="tool-note" id="play-note">Watch the round trips accumulate.</span>
+        </div>
+      </div>
+
+      <figure class="chart">
+        <figcaption>
+          <span>Waterfall</span>
+          <span class="chart-note">Each bar is one phase, on the same time axis as the diagram below.</span>
+        </figcaption>
+        <div id="waterfall" class="svg-slot"></div>
+      </figure>
+
+      <figure class="chart">
+        <figcaption>
+          <span>Space–time diagram</span>
+          <span class="chart-note">Down is a request, up is a response. Every V is one round trip.</span>
+        </figcaption>
+        <div id="ladder" class="svg-slot"></div>
+      </figure>
+
+      <div class="phases" id="phases"></div>
+
+      <div class="report-row">
+        <button type="button" id="copy" class="ghost">Copy the timeline as text</button>
+        <span class="tool-note">For a ticket, a comment or a code review.</span>
+      </div>
+    </section>
+
+  </div>
+
+  <section class="compare">
+    <h2>Four ways to load the same idea</h2>
+    <p class="compare-lead">
+      Scaled against the slowest of the four, so the bars mean something next to each other.
+      The warm revisit is not a faster network: it is the same network with the set-up already
+      paid for.
+    </p>
+    <div id="compare"></div>
+  </section>
+
+  <section id="model" class="prose">
+    <h2>What is actually being counted</h2>
+    <p>
+      Seven phases, in order. Each one is either <strong>latency</strong> (a round trip, paid
+      in milliseconds regardless of size) or <strong>transfer</strong> (bytes, paid in
+      bandwidth). Almost every "the site is slow" conversation is really a question about
+      which of those two the page is spending its time on.
+    </p>
+    <ol class="phase-list">
+      <li><strong>DNS.</strong> Name to address. Three round trips cold, one with a warm
+        resolver, none if the OS still has it.</li>
+      <li><strong>Transport.</strong> TCP's SYN, SYN-ACK, ACK: one round trip. QUIC does the
+        same job with TLS inside it, so HTTP/3 pays once instead of twice.</li>
+      <li><strong>TLS.</strong> One round trip on 1.3, two on 1.2. This is the whole timing
+        difference between the versions on a fresh connection.</li>
+      <li><strong>Request and first byte.</strong> Half a round trip out, the server's own
+        think time, half a round trip back.</li>
+      <li><strong>Document.</strong> The HTML body at line rate, with a slow-start allowance
+        on a new connection.</li>
+      <li><strong>Subresources.</strong> More requests. HTTP/1.1 queues them six connections
+        at a time; HTTP/2 and HTTP/3 multiplex them over one connection, which is the
+        difference between waves and a single crossing.</li>
+      <li><strong>Parse and paint.</strong> The device's turn. The roughest estimate here,
+        and the only one that is not network at all.</li>
+    </ol>
+    <p>
+      The arithmetic is deliberately simple: <code>ms = roundTrips × RTT + serverTime + bytes ÷ bandwidth</code>.
+      The interesting part is not the sum, it is the shape — and the shape is why the same
+      page can be fast on a laptop in Johannesburg and slow on a phone in a lift.
+    </p>
+  </section>
+
+  <section id="limits" class="prose">
+    <h2>What this is not</h2>
+    <ul>
+      <li><strong>Not a measurement.</strong> It does not touch your network, the site, or
+        your device. Every number comes from the options you set and the protocol facts
+        below.</li>
+      <li><strong>Not a benchmark.</strong> A real page load runs many connections in
+        parallel, retries, redirects, and competes with other tabs. This models one clean
+        navigation.</li>
+      <li><strong>Not DNS-complete.</strong> Real resolution involves caches at the browser,
+        OS, router and resolver, and negative caching. Three states is a teaching
+        simplification.</li>
+      <li><strong>Not TLS-complete.</strong> Session resumption, 0-RTT, OCSP and certificate
+        chain size all move the numbers. The model uses one round trip for 1.3 and two for
+        1.2, which is the floor, not the typical case.</li>
+      <li><strong>Not a bandwidth test.</strong> Throughput depends on congestion control,
+        loss, the number of streams and the server's own limits. The bandwidth slider is a
+        pipe, not a promise.</li>
+      <li><strong>Not your user's device.</strong> Parse and paint are an estimate with a
+        slider, and the honest answer is that they vary by an order of magnitude.</li>
+    </ul>
+  </section>
+
+  <section class="prose">
+    <h2>Why the round trips matter more than the megabytes</h2>
+    <p>
+      Latency is a floor, not a cost you can optimise away with a bigger pipe. On a 120 ms
+      mobile link, a connection that needs DNS (3), TCP (1), TLS (1) and a request (1) has
+      spent 720 ms before the first byte of HTML arrives — with an empty pipe the whole time.
+      Doubling the bandwidth changes none of it. Removing a round trip changes all of it.
+    </p>
+    <p>
+      That is the argument for keep-alive, for HTTP/2 and HTTP/3, for CDNs and for edge
+      caches: not "faster downloads", but fewer conversations. When someone says a site is
+      slow on mobile but fine on the office network, this is usually the diagram they need
+      to see.
+    </p>
+  </section>
+
+  <noscript>
+    <p class="prose">This page needs JavaScript: the timeline is computed in the browser,
+      which is also why nothing is sent anywhere.</p>
+  </noscript>
+
+</main>
+
+<footer class="site-footer">
+  <p>
+    Built by <a href="https://github.com/dominicnkutha1-netize">Busokuhle&nbsp;“Dominic”&nbsp;Nkutha</a>.
+    Source on <a href="https://github.com/dominicnkutha1-netize/handshake">GitHub</a>, MIT licensed.
+  </p>
+  <p class="fine">No cookies, no storage, no network requests. It is a model: the only
+    thing it knows about your connection is what you tell it with the sliders.</p>
+</footer>
+
+<script type="module" src="assets/app.js"></script>
+</body>
+</html>
